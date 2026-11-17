@@ -46,7 +46,7 @@ async function getController() {
 		"/wisp/";
 
 	controller = new Controller({
-		serviceworker: registration,
+		serviceworker: navigator.serviceWorker.controller || registration.active,
 		transport: new LibcurlClient({ wisp: wispUrl }),
 		config: {
 			scramjetPath: "/scram/scramjet.js",
