@@ -1,17 +1,16 @@
 import { createServer } from "node:http";
+import { createRequire } from "node:module";
+import path from "node:path";
 import { fileURLToPath } from "url";
 import { hostname } from "node:os";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-
 import { scramjetPath } from "@mercuryworkshop/scramjet/path";
-import { libcurlPath } from "@mercuryworkshop/libcurl-transport";
-import { baremuxPath } from "@mercuryworkshop/bare-mux/node";
 
+const require = createRequire(import.meta.url);
+const dirOf = (specifier) => path.dirname(require.resolve(specifier));
 const publicPath = fileURLToPath(new URL("../public/", import.meta.url));
-
-// Wisp Configuration: Refer to the documentation at https://www.npmjs.com/package/@mercuryworkshop/wisp-js
 
 logging.set_level(logging.NONE);
 Object.assign(wisp.options, {
@@ -47,14 +46,14 @@ fastify.register(fastifyStatic, {
 });
 
 fastify.register(fastifyStatic, {
-	root: libcurlPath,
-	prefix: "/libcurl/",
+	root: dirOf("@mercuryworkshop/scramjet-controller"),
+	prefix: "/controller/",
 	decorateReply: false,
 });
 
 fastify.register(fastifyStatic, {
-	root: baremuxPath,
-	prefix: "/baremux/",
+	root: dirOf("@mercuryworkshop/libcurl-transport"),
+	prefix: "/libcurl/",
 	decorateReply: false,
 });
 
@@ -65,8 +64,6 @@ fastify.setNotFoundHandler((res, reply) => {
 fastify.server.on("listening", () => {
 	const address = fastify.server.address();
 
-	// by default we are listening on 0.0.0.0 (every interface)
-	// we just need to list a few
 	console.log("Listening on:");
 	console.log(`\thttp://localhost:${address.port}`);
 	console.log(`\thttp://${hostname()}:${address.port}`);
