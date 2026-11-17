@@ -20,45 +20,63 @@ const error = document.getElementById("sj-error");
  */
 const errorCode = document.getElementById("sj-error-code");
 
-const { ScramjetController } = $scramjetLoadController();
+let controller = null;
 
-const scramjet = new ScramjetController({
-	files: {
-		wasm: "/scram/scramjet.wasm.wasm",
-		all: "/scram/scramjet.all.js",
-		sync: "/scram/scramjet.sync.js",
-	},
-});
+async function getController() {
+	if (controller) return controller;
 
-scramjet.init();
+	const registration =
+		(await registerSW()) || (await navigator.serviceWorker.ready);
 
-const connection = new BareMux.BareMuxConnection("/baremux/worker.js");
+	if (!navigator.serviceWorker.controller) {
+		await new Promise((resolve) =>
+			navigator.serviceWorker.addEventListener("controllerchange", resolve, {
+				once: true,
+			})
+		);
+	}
+
+	const { Controller } = $scramjetController;
+	const { default: LibcurlClient } = await import("/libcurl/index.mjs");
+
+	const wispUrl =
+		(location.protocol === "https:" ? "wss" : "ws") +
+		"://" +
+		location.host +
+		"/wisp/";
+
+	controller = new Controller({
+		serviceworker: registration,
+		transport: new LibcurlClient({ wisp: wispUrl }),
+		config: {
+			scramjetPath: "/scram/scramjet.js",
+			wasmPath: "/scram/scramjet.wasm",
+			injectPath: "/controller/controller.inject.js",
+		},
+	});
+
+	await controller.wait();
+	return controller;
+}
 
 form.addEventListener("submit", async (event) => {
 	event.preventDefault();
 
+	let sjController;
 	try {
-		await registerSW();
+		sjController = await getController();
 	} catch (err) {
-		error.textContent = "Failed to register service worker.";
+		error.textContent = "Failed to initialize Scramjet 2.0.";
 		errorCode.textContent = err.toString();
 		throw err;
 	}
 
 	const url = search(address.value, searchEngine.value);
 
-	let wispUrl =
-		(location.protocol === "https:" ? "wss" : "ws") +
-		"://" +
-		location.host +
-		"/wisp/";
-	if ((await connection.getTransport()) !== "/libcurl/index.mjs") {
-		await connection.setTransport("/libcurl/index.mjs", [
-			{ websocket: wispUrl },
-		]);
-	}
-	const frame = scramjet.createFrame();
-	frame.frame.id = "sj-frame";
-	document.body.appendChild(frame.frame);
+	const iframe = document.createElement("iframe");
+	iframe.id = "sj-frame";
+	document.body.appendChild(iframe);
+
+	const frame = sjController.createFrame(iframe);
 	frame.go(url);
 });
